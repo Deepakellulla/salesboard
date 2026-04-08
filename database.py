@@ -1,9 +1,9 @@
-from motor.motor_asyncio import AsyncIOMotorClient
-from config import MONGODB_URI
-from datetime import datetime, timedelta
+import os
 import pytz
-from config import TIMEZONE
+from datetime import datetime, timedelta
+from motor.motor_asyncio import AsyncIOMotorClient
 
+TIMEZONE = os.environ.get("TIMEZONE", "Asia/Kolkata")
 tz = pytz.timezone(TIMEZONE)
 
 client = None
@@ -11,8 +11,33 @@ db = None
 
 async def init_db():
     global client, db
-    client = AsyncIOMotorClient(MONGODB_URI)
+
+    uri = os.environ.get("MONGODB_URI") or os.environ.get("MONGO_URL") or os.environ.get("DATABASE_URL")
+
+    print("=" * 50)
+    print("🔍 ENV CHECK:")
+    print(f"  MONGODB_URI = {os.environ.get('MONGODB_URI', 'NOT SET')[:40] if os.environ.get('MONGODB_URI') else 'NOT SET'}")
+    print(f"  MONGO_URL   = {os.environ.get('MONGO_URL', 'NOT SET')[:40] if os.environ.get('MONGO_URL') else 'NOT SET'}")
+    print(f"  URI found   = {'YES → ' + uri[:40] if uri else 'NO - WILL FAIL'}")
+    print("=" * 50)
+
+    if not uri:
+        raise ValueError("MONGODB_URI is empty or not set in Railway environment variables!")
+
+    client = AsyncIOMotorClient(
+        uri,
+        serverSelectionTimeoutMS=10000,
+        connectTimeoutMS=10000,
+        socketTimeoutMS=10000,
+        tls=True,
+        tlsAllowInvalidCertificates=False
+    )
     db = client["sales_bot"]
+
+    # Test connection
+    await client.admin.command("ping")
+    print("✅ MongoDB ping successful!")
+
     # Create indexes
     await db.sales.create_index("order_id", unique=True)
     await db.sales.create_index("buyer_username")
